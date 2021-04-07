@@ -19,6 +19,7 @@ const String AE_ENDPOINT = String(CSE_ENDPOINT) + "/" + String(RESOURCE_NAME);
 uint32_t delayStart = 0;
 uint8_t buttonPrev;
 uint8_t successfulSetup = 0;
+bool menu = 1;
 
 void setup()
 {
@@ -52,13 +53,18 @@ void setup()
 
 void loop()
 {
-  if (successfulSetup && ((delayStart == 0) || ((millis() - delayStart > REQUEST_PERIOD)))) {
+  if ((delayStart == 0) || ((millis() - delayStart > REQUEST_PERIOD))) {
     delayStart = millis();
     handler(
       postData(AE_ENDPOINT + "/DATA", readData()),
       "DATA", "UPDATE"
     );
   }
+  if (digitalRead(BUTTON) == HIGH and buttonPrev == LOW)
+  {
+    updateView();
+  }
+  buttonPrev = digitalRead(BUTTON);
 }
 
 void printLCD(String fl, String sl = "")
@@ -174,4 +180,14 @@ uint32_t postToCse(String endpoint, String payload, uint8_t ty)
   Serial.println();
   client.end();
   return statusCode;
+}
+
+void updateView() {
+  if (menu) {
+    printLCD("CONNECTED TO", SECRET_SSID);
+    }
+  else {
+    printLCD(String("CO2:") + random(200,2400) +" NO2:" + random(20,140), String("SO2:") + random(40,250)+ "  O3: " + random(20,90));
+    }
+   menu = !menu;
 }
