@@ -5,11 +5,12 @@
 #include "secrets.h"
 #include "config.h"
 
+
 // Pinout
 #define BUTTON 16
 
 // LCD
-LiquidCrystal_I2C lcd(0x27, 20, 4);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // AE
 const String AE_ENDPOINT = String(CSE_ENDPOINT) + "/" + String(RESOURCE_NAME);
@@ -22,7 +23,8 @@ uint8_t successfulSetup = 0;
 void setup()
 {
   Serial.begin(115200);
-  lcd.begin(16, 2);
+  lcd.init();
+  lcd.backlight();
   pinMode(BUTTON, INPUT);
 
   if (connectWiFi()) {
