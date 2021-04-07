@@ -1,169 +1,175 @@
 #include <ESP8266WiFi.h>
+#include <ESP8266HTTPClient.h>
 #include <LiquidCrystal_I2C.h>
 #include <Wire.h>
-
-// LCD
-LiquidCrystal_I2C lcd(0x27, 2, 1, 0, 4, 5, 6, 7, 3, POSITIVE);
+#include "secrets.h"
+#include "config.h"
 
 // Pinout
-const int CO2_SENSOR = A0;
-const int BUTTON = 16;
+#define BUTTON 16
 
-// Network config
-const String WIFI_SSID = "vodafoneAA2FWX";
-const String WIFI_PASSWORD = "nLEn4rc7rCexG3tx";
-const uint8_t MAX_ATTEMPTS = 20;
-
-// Endpoint
-const String HOST = "192.168.0.222";
-const int HTTP_PORT = 8080;
+// LCD
+LiquidCrystal_I2C lcd(0x27, 20, 4);
 
 // AE
-const String AE_ORIGINATOR = "Cae_deviceTesting";
-const String RESOURCE_NAME = "sensorGAS1";
+const String AE_ENDPOINT = String(CSE_ENDPOINT) + "/" + String(RESOURCE_NAME);
 
 // Vars
-int reading;
+uint32_t delayStart = 0;
 uint8_t buttonPrev;
+uint8_t successfulSetup = 0;
 
 void setup()
 {
-	lcd.begin(16, 2);
-	Serial.begin(115200);
-	connectWiFi();
-	registerAE();
-	pinMode(BUTTON, INPUT_PULLUP);
-	buttonPrev = digitalRead(BUTTON);
+  Serial.begin(115200);
+  lcd.begin(16, 2);
+  pinMode(BUTTON, INPUT);
+
+  if (connectWiFi()) {
+    if (handler(registerAE(), "AE", "REGISTRATION")) {
+      delay(5000);
+      if (handler(registerCnt("DESCRIPTOR"), "DESCRIPTOR", "CREATION")) {
+        delay(5000);
+        if (handler(registerCnt("DATA"), "DATA", "CREATION")) {
+          delay(5000);
+
+          String positionData = "[" + String(LONGITUDE, 6) + "," + String(LATITUDE, 6) + "]";
+          if (handler(
+                postData(AE_ENDPOINT + "/DESCRIPTOR", positionData),
+                "POSITION", "UPDATE"
+              )) {
+            successfulSetup = 1;
+            pinMode(BUTTON, INPUT_PULLUP);
+            buttonPrev = digitalRead(BUTTON);
+          }
+        }
+      }
+    }
+  }
 }
 
 void loop()
 {
-	if (digitalRead(BUTTON) == HIGH and buttonPrev == LOW)
-	{
-		sendReading();
-	}
-	buttonPrev = digitalRead(BUTTON);
+  if (successfulSetup && ((delayStart == 0) || ((millis() - delayStart > REQUEST_PERIOD)))) {
+    delayStart = millis();
+    handler(
+      postData(AE_ENDPOINT + "/DATA", readData()),
+      "DATA", "UPDATE"
+    );
+  }
 }
 
 void printLCD(String fl, String sl = "")
 {
-	lcd.clear();
-	lcd.setCursor(0, 0);
-	lcd.print(fl);
-	if (sl.length() > 0)
-		;
-	{
-		lcd.setCursor(0, 1);
-		lcd.print(sl);
-	}
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(fl);
+  if (sl.length() > 0);
+  {
+    lcd.setCursor(0, 1);
+    lcd.print(sl);
+  }
 }
 
-void connectWiFi()
-{
-	WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-	int i = 0;
-	Serial.print("Connecting to: ");
-	Serial.println(WIFI_SSID);
-
-	printLCD("CONNECTING");
-
-	while (WiFi.status() != WL_CONNECTED and i < MAX_ATTEMPTS)
-	{
-		Serial.print(".");
-		delay(500);
-		lcd.setCursor(i, 1);
-		lcd.print("*");
-		i++;
-	}
-	if (i < MAX_ATTEMPTS)
-	{
-		Serial.println("\nConnection established!");
-		printLCD("CONNECTED TO", WIFI_SSID);
-	}
-	else
-	{
-		Serial.println("\nConnection failed.");
-		printLCD("ERROR");
-	}
+String readData() {
+  String data;
+  data += "{co2:" + String(random(100, 2500)) + ",";
+  data += "o3:" + String(random(5, 125)) + ",";
+  data += "no2:" + String(random(5, 76)) + ",";
+  data += "so2:" + String(random(10, 250)) + "}";
+  return data;
 }
 
-String sendCSE(String endpoint, String payload, int ty)
+// Setup Functions
+uint8_t connectWiFi()
 {
-	WiFiClient client;
+  WiFi.begin(SECRET_SSID, SECRET_PASS);
+  uint8_t i = 0;
+  Serial.print("Connecting to: ");
+  Serial.println(SECRET_SSID);
 
-	if (!client.connect(HOST, HTTP_PORT))
-	{
-		Serial.println("connection failed");
-	}
+  printLCD("CONNECTING");
 
-	// Request body
-	requestMessage = "POST " + endpoint + " HTTP/1.1\r\n" +
-					 "Host: " + HOST + " \r\n" +
-					 "X-M2M-Origin: " + AE_ORIGINATOR + "\r\n" +
-					 "X-M2M-RVI: 3\r\n" +
-					 "X-M2M-RI: 123456\r\n" +
-					 "Content-Length: " + String(payload.length()) + "\r\n" +
-					 "Content-Type: application/json;ty=" + ty + "\r\n" +
-					 "Connection: close\r\n\r\n" +
-					 payload;
-
-	// Send POST
-	client.print(requestMessage);
-	Serial.println("POST " + payload + " sent to: " + HOST + endpoint + ":" + HTTP_PORT);
-
-	unsigned long timeout = millis();
-	while (client.available() == 0)
-	{
-		if (millis() - timeout > 5000)
-		{
-			Serial.println(">>> Client Timeout !");
-			client.stop();
-			delay(60000);
-			return "error";
-		}
-	}
-
-	// Read the HTTP response
-	String res = "";
-	if (client.available())
-	{
-		res = client.readStringUntil('\r');
-		Serial.print(res);
-	}
-
-	return res;
+  while (WiFi.status() != WL_CONNECTED and i < MAX_ATTEMPTS)
+  {
+    Serial.print(".");
+    delay(500);
+    lcd.setCursor(i, 1);
+    lcd.print("*");
+    i++;
+  }
+  if (i < MAX_ATTEMPTS)
+  {
+    Serial.println("\nConnection established!");
+    printLCD("CONNECTED TO", SECRET_SSID);
+    return 1;
+  }
+  else
+  {
+    Serial.println("\nConnection to WiFi failed.");
+    printLCD("ERROR");
+    return 0;
+  }
 }
 
-void registerAE()
-{
-	String payload;
-	payload = String("{\"m2m:ae\":{") +
-			  "\"rn\":\"" + String(RESOURCE_NAME) + "\",\r\n" +
-			  "\"api\":\"N." + String(RESOURCE_NAME) + ".ROTehc.com\",\r\n" +
-			  "\"srv\": [\"3\"],\r\n" +
-			  "\"rr\":false}}";
-
-	String res = sendCSE("/cse-in", payload, 2);
-
-	if (res == "HTTP/1.1 201 CREATED")
-	{
-		printLCD("AE REGISTERED", "SUCCESSFULLY");
-		delay(1000);
-		payload = String("{\"m2m:cnt\":{\"rn\":\"gas_ppm\"}}");
-		String endpoint = String("/cse-in/") + RESOURCE_NAME;
-		res = sendCSE(endpoint, payload, 3);
-		if (res == "HTTP/1.1 201 CREATED")
-		{
-			printLCD("CNT CREATED", "SUCCESSFULLY");
-			delay(1000);
-		}
-	}
+// CSE Functions
+int16_t handler(int16_t responseCode, String resource, String action) {
+  if (responseCode == 201)
+  {
+    Serial.println(resource + " " + action + " SUCCESS\n");
+    printLCD(resource + " " + action, "SUCCESS");
+    return 1;
+  } else {
+    Serial.print(resource + " " + action);
+    Serial.printf(" ERROR: CODE %d\n\n", responseCode);
+    printLCD(resource + " " + action, "ERROR");
+    return 0;
+  }
 }
 
-void sendReading()
+uint16_t registerAE()
 {
-	reading = analogRead(CO2_SENSOR);
-	String payload = "{\"m2m:cin\": {\"con\": \"" + String(reading) + "\"}}";
-	sendCSE("/cse-in/" + RESOURCE_NAME + "/gas_ppm", payload, 4);
-	printLCD("DATA SENT TO CSE", "READING: " + String(reading));
+  String payload = "{\"m2m:ae\":{\"rn\":\"" +
+                   String(RESOURCE_NAME) +
+                   String("\",\"api\":\"N.ROTehc.com.") +
+                   String(RESOURCE_NAME) +
+                   String("\",\"srv\":[\"3\"],\"rr\":false}}");
+
+  return postToCse(CSE_ENDPOINT, payload, 2);
+}
+
+uint16_t registerCnt(String rn) {
+  String payload = "{\"m2m:cnt\":{\"mbs\":10000,\"mni\":10,\"rn\":\"" + rn + "\"}}";
+  return postToCse(AE_ENDPOINT, payload, 3);
+}
+
+uint16_t postData(String endpoint, String data) {
+  String payload = "{\"m2m:cin\":{\"cnf\":\"application/json\",\"con\":\"" + data + "\"}}";
+  return postToCse(endpoint, payload, 4);
+}
+
+uint32_t postToCse(String endpoint, String payload, uint8_t ty)
+{
+  HTTPClient client;
+  String url = String(SECRET_HOST) + ":" + String(SECRET_PORT) + endpoint;
+  if (!client.begin(url)) {
+    Serial.println("Connection to host failed");
+    return 0;
+  }
+  client.addHeader("X-M2M-Origin", CSE_ORIGINATOR);
+  client.addHeader("X-M2M-RVI", String(CSE_RELEASE));
+  client.addHeader("X-M2M-RI", "123456");
+  client.addHeader("Content-Type", "application/json;ty=" + String(ty));
+  client.addHeader("Content-Length", String(payload.length()));
+  client.addHeader("Accept", "application/json");
+
+  // Send POST
+  int16_t statusCode = client.POST(payload);
+  Serial.println("POST sent to: " + String(SECRET_HOST) + ":" + String(SECRET_PORT) + endpoint + " with status " + statusCode);
+  Serial.print(payload);
+  Serial.print("\n\nResponse: ");
+  Serial.println(client.getString());
+  Serial.println();
+  client.end();
+  return statusCode;
 }
