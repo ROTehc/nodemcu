@@ -27,10 +27,10 @@ void setup() {
 
   if (connectWiFi()) {
     if (handler(registerAE(), "AE", "REGISTRATION")) {
-      String mni = "1";
-      handler(registerCnt("DESCRIPTOR", mni), "DESCRIPTOR", "CREATION");
-      mni = String(MAX_CIN_AGE_DAYS * 24 * 60 * 60 * 1000 / REQUEST_PERIOD);
-      handler(registerCnt("DATA", mni), "DATA", "CREATION");
+      uint16_t mni = 1;
+      handler(registerCnt("DESCRIPTOR", String(mni)), "DESCRIPTOR", "CREATION");
+      mni = MAX_CIN_AGE_DAYS * 24 * 60 * 60 * 1000 / REQUEST_PERIOD;
+      handler(registerCnt("DATA", String(mni)), "DATA", "CREATION");
       String positionData = "[" + String(LONGITUDE, 6) + "," + String(LATITUDE, 6) + "]";
       handler(postData(AE_ENDPOINT + "/DESCRIPTOR", positionData), "POSITION",
               "UPDATE");
@@ -63,12 +63,15 @@ void printLCD(String fl, String sl = "") {
   }
 }
 
+uint16_t co2 = 0;
+
 String readData() {
   String data;
-  data += "{co2:" + String(random(100, 2500)) + ",";
+  data += "{co2:" + String(co2) + ","; // random(100, 2500)
   data += "o3:" + String(random(5, 125)) + ",";
   data += "no2:" + String(random(5, 76)) + ",";
   data += "so2:" + String(random(10, 250)) + "}";
+  co2 += 1;
   return data;
 }
 
@@ -144,7 +147,7 @@ uint32_t postToCse(String endpoint, String payload, uint8_t ty) {
   client.addHeader("X-M2M-Origin", CSE_ORIGINATOR);
   client.addHeader("X-M2M-RVI", String(CSE_RELEASE));
   client.addHeader("X-M2M-RI", "123456");
-  client.addHeader("Content-Type", "application/json;ty=" + String(ty));
+  client.addHeader("Content-Type", "application/vnd.onem2m-res+json; ty=" + String(ty));
   client.addHeader("Content-Length", String(payload.length()));
   client.addHeader("Accept", "application/json");
 
