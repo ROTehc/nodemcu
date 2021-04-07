@@ -1,10 +1,9 @@
-#include <ESP8266WiFi.h>
+#include "config.h"
+#include "secrets.h"
 #include <ESP8266HTTPClient.h>
+#include <ESP8266WiFi.h>
 #include <LiquidCrystal_I2C.h>
 #include <Wire.h>
-#include "secrets.h"
-#include "config.h"
-
 
 // Pinout
 #define BUTTON 16
@@ -18,11 +17,9 @@ const String AE_ENDPOINT = String(CSE_ENDPOINT) + "/" + String(RESOURCE_NAME);
 // Vars
 uint32_t delayStart = 0;
 uint8_t buttonPrev;
-uint8_t successfulSetup = 0;
 bool menu = 1;
 
-void setup()
-{
+void setup() {
   Serial.begin(115200);
   lcd.init();
   lcd.backlight();
@@ -30,49 +27,36 @@ void setup()
 
   if (connectWiFi()) {
     if (handler(registerAE(), "AE", "REGISTRATION")) {
-      delay(5000);
-      if (handler(registerCnt("DESCRIPTOR"), "DESCRIPTOR", "CREATION")) {
-        delay(5000);
-        if (handler(registerCnt("DATA"), "DATA", "CREATION")) {
-          delay(5000);
-
-          String positionData = "[" + String(LONGITUDE, 6) + "," + String(LATITUDE, 6) + "]";
-          if (handler(
-                postData(AE_ENDPOINT + "/DESCRIPTOR", positionData),
-                "POSITION", "UPDATE"
-              )) {
-            successfulSetup = 1;
-            pinMode(BUTTON, INPUT_PULLUP);
-            buttonPrev = digitalRead(BUTTON);
-          }
-        }
-      }
+      String mni = "1";
+      handler(registerCnt("DESCRIPTOR", mni), "DESCRIPTOR", "CREATION");
+      mni = String(MAX_CIN_AGE_DAYS * 24 * 60 * 60 * 1000 / REQUEST_PERIOD);
+      handler(registerCnt("DATA", mni), "DATA", "CREATION");
+      String positionData = "[" + String(LONGITUDE, 6) + "," + String(LATITUDE, 6) + "]";
+      handler(postData(AE_ENDPOINT + "/DESCRIPTOR", positionData), "POSITION",
+              "UPDATE");
+      pinMode(BUTTON, INPUT_PULLUP);
+      buttonPrev = digitalRead(BUTTON);
     }
   }
 }
 
-void loop()
-{
+void loop() {
   if ((delayStart == 0) || ((millis() - delayStart > REQUEST_PERIOD))) {
     delayStart = millis();
-    handler(
-      postData(AE_ENDPOINT + "/DATA", readData()),
-      "DATA", "UPDATE"
-    );
+    handler(postData(AE_ENDPOINT + "/DATA", readData()), "DATA", "UPDATE");
   }
-  if (digitalRead(BUTTON) == HIGH and buttonPrev == LOW)
-  {
+  if (digitalRead(BUTTON) == HIGH and buttonPrev == LOW) {
     updateView();
   }
   buttonPrev = digitalRead(BUTTON);
 }
 
-void printLCD(String fl, String sl = "")
-{
+void printLCD(String fl, String sl = "") {
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print(fl);
-  if (sl.length() > 0);
+  if (sl.length() > 0)
+    ;
   {
     lcd.setCursor(0, 1);
     lcd.print(sl);
@@ -89,8 +73,7 @@ String readData() {
 }
 
 // Setup Functions
-uint8_t connectWiFi()
-{
+uint8_t connectWiFi() {
   WiFi.begin(SECRET_SSID, SECRET_PASS);
   uint8_t i = 0;
   Serial.print("Connecting to: ");
@@ -98,22 +81,18 @@ uint8_t connectWiFi()
 
   printLCD("CONNECTING");
 
-  while (WiFi.status() != WL_CONNECTED and i < MAX_ATTEMPTS)
-  {
+  while (WiFi.status() != WL_CONNECTED and i < MAX_ATTEMPTS) {
     Serial.print(".");
     delay(500);
     lcd.setCursor(i, 1);
     lcd.print("*");
     i++;
   }
-  if (i < MAX_ATTEMPTS)
-  {
+  if (i < MAX_ATTEMPTS) {
     Serial.println("\nConnection established!");
     printLCD("CONNECTED TO", SECRET_SSID);
     return 1;
-  }
-  else
-  {
+  } else {
     Serial.println("\nConnection to WiFi failed.");
     printLCD("ERROR");
     return 0;
@@ -122,8 +101,7 @@ uint8_t connectWiFi()
 
 // CSE Functions
 int16_t handler(int16_t responseCode, String resource, String action) {
-  if (responseCode == 201)
-  {
+  if (responseCode == 201) {
     Serial.println(resource + " " + action + " SUCCESS\n");
     printLCD(resource + " " + action, "SUCCESS");
     return 1;
@@ -135,10 +113,8 @@ int16_t handler(int16_t responseCode, String resource, String action) {
   }
 }
 
-uint16_t registerAE()
-{
-  String payload = "{\"m2m:ae\":{\"rn\":\"" +
-                   String(RESOURCE_NAME) +
+uint16_t registerAE() {
+  String payload = "{\"m2m:ae\":{\"rn\":\"" + String(RESOURCE_NAME) +
                    String("\",\"api\":\"N.ROTehc.com.") +
                    String(RESOURCE_NAME) +
                    String("\",\"srv\":[\"3\"],\"rr\":false}}");
@@ -146,18 +122,19 @@ uint16_t registerAE()
   return postToCse(CSE_ENDPOINT, payload, 2);
 }
 
-uint16_t registerCnt(String rn) {
-  String payload = "{\"m2m:cnt\":{\"mbs\":10000,\"mni\":10,\"rn\":\"" + rn + "\"}}";
+uint16_t registerCnt(String rn, String mni) {
+  String payload = "{\"m2m:cnt\":{\"mni\":" + mni + ",\"rn\":\"" + rn +
+                   "\"}}";
   return postToCse(AE_ENDPOINT, payload, 3);
 }
 
 uint16_t postData(String endpoint, String data) {
-  String payload = "{\"m2m:cin\":{\"cnf\":\"application/json\",\"con\":\"" + data + "\"}}";
+  String payload =
+      "{\"m2m:cin\":{\"cnf\":\"application/json\",\"con\":\"" + data + "\"}}";
   return postToCse(endpoint, payload, 4);
 }
 
-uint32_t postToCse(String endpoint, String payload, uint8_t ty)
-{
+uint32_t postToCse(String endpoint, String payload, uint8_t ty) {
   HTTPClient client;
   String url = String(SECRET_HOST) + ":" + String(SECRET_PORT) + endpoint;
   if (!client.begin(url)) {
@@ -173,7 +150,8 @@ uint32_t postToCse(String endpoint, String payload, uint8_t ty)
 
   // Send POST
   int16_t statusCode = client.POST(payload);
-  Serial.println("POST sent to: " + String(SECRET_HOST) + ":" + String(SECRET_PORT) + endpoint + " with status " + statusCode);
+  Serial.println("POST sent to: " + String(SECRET_HOST) + ":" +
+                 String(SECRET_PORT) + endpoint + " with status " + statusCode);
   Serial.print(payload);
   Serial.print("\n\nResponse: ");
   Serial.println(client.getString());
@@ -185,9 +163,9 @@ uint32_t postToCse(String endpoint, String payload, uint8_t ty)
 void updateView() {
   if (menu) {
     printLCD("CONNECTED TO", SECRET_SSID);
-    }
-  else {
-    printLCD(String("CO2:") + random(200,2400) +" NO2:" + random(20,140), String("SO2:") + random(40,250)+ "  O3: " + random(20,90));
-    }
-   menu = !menu;
+  } else {
+    printLCD(String("CO2:") + random(200, 2400) + " NO2:" + random(20, 140),
+             String("SO2:") + random(40, 250) + "  O3: " + random(20, 90));
+  }
+  menu = !menu;
 }
