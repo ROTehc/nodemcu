@@ -29,10 +29,11 @@ This repository contains the code for nodeMCU devices for ETSI OneM2M Hackaton i
 #define LONGITUDE xxxxxx
 #define LATITUDE xxxxxx
 
-#define CSE_ORIGINATOR "xxxxxx"
-#define CSE_ENDPOINT "xxxxxx"
-#define CSE_RELEASE x
-
 #define REQUEST_PERIOD xxxxxx
 #define MAX_ATTEMPTS xxxxxx
+#define MAX_CIN_AGE_DAYS xxxxxx
+
+#define CSE_ORIGINATOR "xxxxxx"
+#define CSE_ENDPOINT "xxxxxx"
+#define CSE_RELEASE xxxxxx
 ```
