@@ -32,12 +32,13 @@ void setup() {
       handler(registerCnt("DESCRIPTOR", String(mni)), "DESCRIPTOR", "CREATION");
       mni = MAX_CIN_AGE_DAYS * 24 * 60 * 60 * 1000 / REQUEST_PERIOD;
       handler(registerCnt("DATA", String(mni)), "DATA", "CREATION");
-      String positionData = "[" + String(LONGITUDE, 6) + "," + String(LATITUDE, 6) + "]";
+      String positionData =
+          "[" + String(LONGITUDE, 6) + "," + String(LATITUDE, 6) + "]";
       handler(postData(AE_ENDPOINT + "/DESCRIPTOR", positionData), "POSITION",
               "UPDATE");
-      pinMode(BUTTON, INPUT_PULLUP);
-      buttonPrev = digitalRead(BUTTON);
     }
+    pinMode(BUTTON, INPUT_PULLUP);
+    buttonPrev = digitalRead(BUTTON);
   }
 }
 
@@ -64,15 +65,12 @@ void printLCD(String fl, String sl = "") {
   }
 }
 
-uint16_t co2 = 0;
-
 String readData() {
   String data;
-  data += "{co2:" + String(co2) + ","; // random(100, 2500)
-  data += "o3:" + String(random(5, 125)) + ",";
-  data += "no2:" + String(random(5, 76)) + ",";
-  data += "so2:" + String(random(10, 250)) + "}";
-  co2 += 1;
+  data += "{\\\"co2\\\":" + String(random(100, 2500)) + ",";
+  data += "\\\"o3\\\":" + String(random(5, 125)) + ",";
+  data += "\\\"no2\\\":" + String(random(5, 76)) + ",";
+  data += "\\\"so2\\\":" + String(random(10, 250)) + "}";
   return data;
 }
 
@@ -127,14 +125,13 @@ uint16_t registerAE() {
 }
 
 uint16_t registerCnt(String rn, String mni) {
-  String payload = "{\"m2m:cnt\":{\"mni\":" + mni + ",\"rn\":\"" + rn +
-                   "\"}}";
+  String payload = "{\"m2m:cnt\":{\"mni\":" + mni + ",\"rn\":\"" + rn + "\"}}";
   return postToCse(AE_ENDPOINT, payload, 3);
 }
 
 uint16_t postData(String endpoint, String data) {
   String payload =
-    "{\"m2m:cin\":{\"cnf\":\"application/json\",\"con\":\"" + data + "\"}}";
+      "{\"m2m:cin\":{\"cnf\":\"application/json\",\"con\":\"" + data + "\"}}";
   return postToCse(endpoint, payload, 4);
 }
 
@@ -148,7 +145,8 @@ uint32_t postToCse(String endpoint, String payload, uint8_t ty) {
   client.addHeader("X-M2M-Origin", ORIGINATOR);
   client.addHeader("X-M2M-RVI", String(CSE_RELEASE));
   client.addHeader("X-M2M-RI", "123456");
-  client.addHeader("Content-Type", "application/vnd.onem2m-res+json; ty=" + String(ty));
+  client.addHeader("Content-Type",
+                   "application/vnd.onem2m-res+json; ty=" + String(ty));
   client.addHeader("Content-Length", String(payload.length()));
   client.addHeader("Accept", "application/json");
 
