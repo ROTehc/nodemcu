@@ -11,6 +11,9 @@
 // LCD
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
+// CSE
+const String address = String(CSE_SCHEMA) + "://" + String(CSE_ADDRESS) + ":" + String(CSE_PORT);
+
 // AE
 const String AE_ENDPOINT = String(CSE_ENDPOINT) + "/" + String(RESOURCE_NAME);
 const String ORIGINATOR = String(CSE_ORIGINATOR) + String(RESOURCE_NAME);
@@ -28,10 +31,8 @@ void setup() {
 
   if (connectWiFi()) {
     if (handler(registerAE(), "AE", "REGISTRATION")) {
-      uint16_t mni = 1;
-      handler(registerCnt("DESCRIPTOR", String(mni)), "DESCRIPTOR", "CREATION");
-      mni = MAX_CIN_AGE_DAYS * 24 * 60 * 60 * 1000 / REQUEST_PERIOD;
-      handler(registerCnt("DATA", String(mni)), "DATA", "CREATION");
+      handler(registerCnt("DESCRIPTOR", String(1)), "DESCRIPTOR", "CREATION");
+      handler(registerCnt("DATA", String(MAX_CIN)), "DATA", "CREATION");
       String positionData =
           "[" + String(LONGITUDE, 6) + "," + String(LATITUDE, 6) + "]";
       handler(postData(AE_ENDPOINT + "/DESCRIPTOR", positionData), "POSITION",
@@ -137,7 +138,7 @@ uint16_t postData(String endpoint, String data) {
 
 uint32_t postToCse(String endpoint, String payload, uint8_t ty) {
   HTTPClient client;
-  String url = String(SECRET_HOST) + ":" + String(SECRET_PORT) + endpoint;
+  String url = address + endpoint;
   if (!client.begin(url)) {
     Serial.println("Connection to host failed");
     return 0;
@@ -152,8 +153,7 @@ uint32_t postToCse(String endpoint, String payload, uint8_t ty) {
 
   // Send POST
   int16_t statusCode = client.POST(payload);
-  Serial.println("POST sent to: " + String(SECRET_HOST) + ":" +
-                 String(SECRET_PORT) + endpoint + " with status " + statusCode);
+  Serial.println("POST sent to: " + address + endpoint + " with status " + statusCode);
   Serial.print(payload);
   Serial.print("\n\nResponse: ");
   Serial.println(client.getString());
