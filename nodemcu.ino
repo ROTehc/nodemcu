@@ -13,6 +13,7 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // AE
 const String AE_ENDPOINT = String(CSE_ENDPOINT) + "/" + String(RESOURCE_NAME);
+const String ORIGINATOR = String(CSE_ORIGINATOR) + String(RESOURCE_NAME);
 
 // Vars
 uint32_t delayStart = 0;
@@ -118,7 +119,7 @@ int16_t handler(int16_t responseCode, String resource, String action) {
 
 uint16_t registerAE() {
   String payload = "{\"m2m:ae\":{\"rn\":\"" + String(RESOURCE_NAME) +
-                   String("\",\"api\":\"N.ROTehc.com.") +
+                   String("\",\"api\":\"N01.ROTehc.com.") +
                    String(RESOURCE_NAME) +
                    String("\",\"srv\":[\"3\"],\"rr\":false}}");
 
@@ -133,7 +134,7 @@ uint16_t registerCnt(String rn, String mni) {
 
 uint16_t postData(String endpoint, String data) {
   String payload =
-      "{\"m2m:cin\":{\"cnf\":\"application/json\",\"con\":\"" + data + "\"}}";
+    "{\"m2m:cin\":{\"cnf\":\"application/json\",\"con\":\"" + data + "\"}}";
   return postToCse(endpoint, payload, 4);
 }
 
@@ -144,7 +145,7 @@ uint32_t postToCse(String endpoint, String payload, uint8_t ty) {
     Serial.println("Connection to host failed");
     return 0;
   }
-  client.addHeader("X-M2M-Origin", CSE_ORIGINATOR);
+  client.addHeader("X-M2M-Origin", ORIGINATOR);
   client.addHeader("X-M2M-RVI", String(CSE_RELEASE));
   client.addHeader("X-M2M-RI", "123456");
   client.addHeader("Content-Type", "application/vnd.onem2m-res+json; ty=" + String(ty));
