@@ -218,4 +218,5 @@ void updateView()
              String("SO2:") + random(40, 250) + "  O3: " + random(20, 90));
   }
   menu = !menu;
+  delay(100);
 }
