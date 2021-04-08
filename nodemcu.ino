@@ -27,7 +27,8 @@ uint32_t delayStart = 0;
 uint8_t buttonPrev;
 bool menu = 1;
 
-void setup() {
+void setup()
+{
   Serial.begin(115200);
   lcd.init();
   lcd.backlight();
@@ -37,10 +38,11 @@ void setup() {
   pinMode(CNT_DESCRIPTOR_LED, OUTPUT);
   pinMode(SEND_LED, OUTPUT);
   pinMode(BUTTON, INPUT_PULLUP);
-  
-  if (connectWiFi()) {
-    if (handler(registerAE(), "AE", "REGISTRATION")) {
-<<<<<<< HEAD
+
+  if (connectWiFi())
+  {
+    if (handler(registerAE(), "AE", "REGISTRATION"))
+    {
       digitalWrite(AE_LED, HIGH);
       uint16_t mni = 1;
       handler(registerCnt("DESCRIPTOR", String(mni)), "DESCRIPTOR", "CREATION");
@@ -51,20 +53,12 @@ void setup() {
       String positionData = "[" + String(LONGITUDE, 6) + "," + String(LATITUDE, 6) + "]";
       handler(postData(AE_ENDPOINT + "/DESCRIPTOR", positionData), "POSITION",
               "UPDATE");
-      
     }
-    else {
+    else
+    {
       digitalWrite(AE_LED, HIGH);
       digitalWrite(CNT_DATA_LED, HIGH);
       digitalWrite(CNT_DESCRIPTOR_LED, HIGH);
-=======
-      handler(registerCnt("DESCRIPTOR", String(1)), "DESCRIPTOR", "CREATION");
-      handler(registerCnt("DATA", String(MAX_CIN)), "DATA", "CREATION");
-      String positionData =
-          "[" + String(LONGITUDE, 6) + "," + String(LATITUDE, 6) + "]";
-      handler(postData(AE_ENDPOINT + "/DESCRIPTOR", positionData), "POSITION",
-              "UPDATE");
->>>>>>> 7a1c0db45799f2ecacd2a4d28ee741068c5d611a
     }
     pinMode(BUTTON, INPUT_PULLUP);
     buttonPrev = digitalRead(BUTTON);
@@ -72,20 +66,24 @@ void setup() {
   buttonPrev = digitalRead(BUTTON);
 }
 
-void loop() {
-  if ((delayStart == 0) || ((millis() - delayStart > REQUEST_PERIOD))) {
+void loop()
+{
+  if ((delayStart == 0) || ((millis() - delayStart > REQUEST_PERIOD)))
+  {
     delayStart = millis();
     digitalWrite(SEND_LED, HIGH);
     handler(postData(AE_ENDPOINT + "/DATA", readData()), "DATA", "UPDATE");
     digitalWrite(SEND_LED, LOW);
   }
-  if (digitalRead(BUTTON) == HIGH and buttonPrev == LOW) {
+  if (digitalRead(BUTTON) == HIGH and buttonPrev == LOW)
+  {
     updateView();
   }
   buttonPrev = digitalRead(BUTTON);
 }
 
-void printLCD(String fl, String sl = "") {
+void printLCD(String fl, String sl = "")
+{
   lcd.clear();
   lcd.setCursor(0, 0);
   lcd.print(fl);
@@ -97,7 +95,8 @@ void printLCD(String fl, String sl = "") {
   }
 }
 
-String readData() {
+String readData()
+{
   String data;
   data += "{\\\"co2\\\":" + String(random(100, 2500)) + ",";
   data += "\\\"o3\\\":" + String(random(5, 125)) + ",";
@@ -107,7 +106,8 @@ String readData() {
 }
 
 // Setup Functions
-uint8_t connectWiFi() {
+uint8_t connectWiFi()
+{
   WiFi.begin(SECRET_SSID, SECRET_PASS);
   uint8_t i = 0;
   Serial.print("Connecting to: ");
@@ -115,18 +115,22 @@ uint8_t connectWiFi() {
 
   printLCD("CONNECTING");
 
-  while (WiFi.status() != WL_CONNECTED and i < MAX_ATTEMPTS) {
+  while (WiFi.status() != WL_CONNECTED and i < MAX_ATTEMPTS)
+  {
     Serial.print(".");
     delay(500);
     lcd.setCursor(i, 1);
     lcd.print("*");
     i++;
   }
-  if (i < MAX_ATTEMPTS) {
+  if (i < MAX_ATTEMPTS)
+  {
     Serial.println("\nConnection established!");
     printLCD("CONNECTED TO", SECRET_SSID);
     return 1;
-  } else {
+  }
+  else
+  {
     Serial.println("\nConnection to WiFi failed.");
     printLCD("ERROR");
     return 0;
@@ -134,12 +138,16 @@ uint8_t connectWiFi() {
 }
 
 // CSE Functions
-int16_t handler(int16_t responseCode, String resource, String action) {
-  if (responseCode == 201) {
+int16_t handler(int16_t responseCode, String resource, String action)
+{
+  if (responseCode == 201)
+  {
     Serial.println(resource + " " + action + " SUCCESS\n");
     printLCD(resource + " " + action, "SUCCESS");
     return 1;
-  } else {
+  }
+  else
+  {
     Serial.print(resource + " " + action);
     Serial.printf(" ERROR: CODE %d\n\n", responseCode);
     printLCD(resource + " " + action, "ERROR");
@@ -147,7 +155,8 @@ int16_t handler(int16_t responseCode, String resource, String action) {
   }
 }
 
-uint16_t registerAE() {
+uint16_t registerAE()
+{
   String payload = "{\"m2m:ae\":{\"rn\":\"" + String(RESOURCE_NAME) +
                    String("\",\"api\":\"N01.ROTehc.com.") +
                    String(RESOURCE_NAME) +
@@ -156,21 +165,25 @@ uint16_t registerAE() {
   return postToCse(CSE_ENDPOINT, payload, 2);
 }
 
-uint16_t registerCnt(String rn, String mni) {
+uint16_t registerCnt(String rn, String mni)
+{
   String payload = "{\"m2m:cnt\":{\"mni\":" + mni + ",\"rn\":\"" + rn + "\"}}";
   return postToCse(AE_ENDPOINT, payload, 3);
 }
 
-uint16_t postData(String endpoint, String data) {
+uint16_t postData(String endpoint, String data)
+{
   String payload =
       "{\"m2m:cin\":{\"cnf\":\"application/json\",\"con\":\"" + data + "\"}}";
   return postToCse(endpoint, payload, 4);
 }
 
-uint32_t postToCse(String endpoint, String payload, uint8_t ty) {
+uint32_t postToCse(String endpoint, String payload, uint8_t ty)
+{
   HTTPClient client;
   String url = address + endpoint;
-  if (!client.begin(url)) {
+  if (!client.begin(url))
+  {
     Serial.println("Connection to host failed");
     return 0;
   }
@@ -193,10 +206,14 @@ uint32_t postToCse(String endpoint, String payload, uint8_t ty) {
   return statusCode;
 }
 
-void updateView() {
-  if (menu) {
+void updateView()
+{
+  if (menu)
+  {
     printLCD("CONNECTED TO", SECRET_SSID);
-  } else {
+  }
+  else
+  {
     printLCD(String("CO2:") + random(200, 2400) + " NO2:" + random(20, 140),
              String("SO2:") + random(40, 250) + "  O3: " + random(20, 90));
   }
