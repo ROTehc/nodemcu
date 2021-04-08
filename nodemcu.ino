@@ -7,6 +7,10 @@
 
 // Pinout
 #define BUTTON 16
+#define AE_LED D3
+#define CNT_DESCRIPTOR_LED D4
+#define CNT_DATA_LED D5
+#define SEND_LED D6
 
 // LCD
 LiquidCrystal_I2C lcd(0x27, 16, 2);
@@ -24,26 +28,41 @@ void setup() {
   lcd.init();
   lcd.backlight();
   pinMode(BUTTON, INPUT);
-
+  pinMode(AE_LED, OUTPUT);
+  pinMode(CNT_DATA_LED, OUTPUT);
+  pinMode(CNT_DESCRIPTOR_LED, OUTPUT);
+  pinMode(SEND_LED, OUTPUT);
+  pinMode(BUTTON, INPUT_PULLUP);
+  
   if (connectWiFi()) {
     if (handler(registerAE(), "AE", "REGISTRATION")) {
+      digitalWrite(AE_LED, HIGH);
       uint16_t mni = 1;
       handler(registerCnt("DESCRIPTOR", String(mni)), "DESCRIPTOR", "CREATION");
+      digitalWrite(CNT_DESCRIPTOR_LED, HIGH);
       mni = MAX_CIN_AGE_DAYS * 24 * 60 * 60 * 1000 / REQUEST_PERIOD;
       handler(registerCnt("DATA", String(mni)), "DATA", "CREATION");
+      digitalWrite(CNT_DATA_LED, HIGH);
       String positionData = "[" + String(LONGITUDE, 6) + "," + String(LATITUDE, 6) + "]";
       handler(postData(AE_ENDPOINT + "/DESCRIPTOR", positionData), "POSITION",
               "UPDATE");
-      pinMode(BUTTON, INPUT_PULLUP);
-      buttonPrev = digitalRead(BUTTON);
+      
+    }
+    else {
+      digitalWrite(AE_LED, HIGH);
+      digitalWrite(CNT_DATA_LED, HIGH);
+      digitalWrite(CNT_DESCRIPTOR_LED, HIGH);
     }
   }
+  buttonPrev = digitalRead(BUTTON);
 }
 
 void loop() {
   if ((delayStart == 0) || ((millis() - delayStart > REQUEST_PERIOD))) {
     delayStart = millis();
+    digitalWrite(SEND_LED, HIGH);
     handler(postData(AE_ENDPOINT + "/DATA", readData()), "DATA", "UPDATE");
+    digitalWrite(SEND_LED, LOW);
   }
   if (digitalRead(BUTTON) == HIGH and buttonPrev == LOW) {
     updateView();
