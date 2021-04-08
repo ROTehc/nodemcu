@@ -15,8 +15,12 @@
 // LCD
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
+// CSE
+const String address = String(CSE_SCHEMA) + "://" + String(CSE_ADDRESS) + ":" + String(CSE_PORT);
+
 // AE
 const String AE_ENDPOINT = String(CSE_ENDPOINT) + "/" + String(RESOURCE_NAME);
+const String ORIGINATOR = String(CSE_ORIGINATOR) + String(RESOURCE_NAME);
 
 // Vars
 uint32_t delayStart = 0;
@@ -36,6 +40,7 @@ void setup() {
   
   if (connectWiFi()) {
     if (handler(registerAE(), "AE", "REGISTRATION")) {
+<<<<<<< HEAD
       digitalWrite(AE_LED, HIGH);
       uint16_t mni = 1;
       handler(registerCnt("DESCRIPTOR", String(mni)), "DESCRIPTOR", "CREATION");
@@ -52,7 +57,17 @@ void setup() {
       digitalWrite(AE_LED, HIGH);
       digitalWrite(CNT_DATA_LED, HIGH);
       digitalWrite(CNT_DESCRIPTOR_LED, HIGH);
+=======
+      handler(registerCnt("DESCRIPTOR", String(1)), "DESCRIPTOR", "CREATION");
+      handler(registerCnt("DATA", String(MAX_CIN)), "DATA", "CREATION");
+      String positionData =
+          "[" + String(LONGITUDE, 6) + "," + String(LATITUDE, 6) + "]";
+      handler(postData(AE_ENDPOINT + "/DESCRIPTOR", positionData), "POSITION",
+              "UPDATE");
+>>>>>>> 7a1c0db45799f2ecacd2a4d28ee741068c5d611a
     }
+    pinMode(BUTTON, INPUT_PULLUP);
+    buttonPrev = digitalRead(BUTTON);
   }
   buttonPrev = digitalRead(BUTTON);
 }
@@ -82,15 +97,12 @@ void printLCD(String fl, String sl = "") {
   }
 }
 
-uint16_t co2 = 0;
-
 String readData() {
   String data;
-  data += "{co2:" + String(co2) + ","; // random(100, 2500)
-  data += "o3:" + String(random(5, 125)) + ",";
-  data += "no2:" + String(random(5, 76)) + ",";
-  data += "so2:" + String(random(10, 250)) + "}";
-  co2 += 1;
+  data += "{\\\"co2\\\":" + String(random(100, 2500)) + ",";
+  data += "\\\"o3\\\":" + String(random(5, 125)) + ",";
+  data += "\\\"no2\\\":" + String(random(5, 76)) + ",";
+  data += "\\\"so2\\\":" + String(random(10, 250)) + "}";
   return data;
 }
 
@@ -137,7 +149,7 @@ int16_t handler(int16_t responseCode, String resource, String action) {
 
 uint16_t registerAE() {
   String payload = "{\"m2m:ae\":{\"rn\":\"" + String(RESOURCE_NAME) +
-                   String("\",\"api\":\"N.ROTehc.com.") +
+                   String("\",\"api\":\"N01.ROTehc.com.") +
                    String(RESOURCE_NAME) +
                    String("\",\"srv\":[\"3\"],\"rr\":false}}");
 
@@ -145,8 +157,7 @@ uint16_t registerAE() {
 }
 
 uint16_t registerCnt(String rn, String mni) {
-  String payload = "{\"m2m:cnt\":{\"mni\":" + mni + ",\"rn\":\"" + rn +
-                   "\"}}";
+  String payload = "{\"m2m:cnt\":{\"mni\":" + mni + ",\"rn\":\"" + rn + "\"}}";
   return postToCse(AE_ENDPOINT, payload, 3);
 }
 
@@ -158,22 +169,22 @@ uint16_t postData(String endpoint, String data) {
 
 uint32_t postToCse(String endpoint, String payload, uint8_t ty) {
   HTTPClient client;
-  String url = String(SECRET_HOST) + ":" + String(SECRET_PORT) + endpoint;
+  String url = address + endpoint;
   if (!client.begin(url)) {
     Serial.println("Connection to host failed");
     return 0;
   }
-  client.addHeader("X-M2M-Origin", CSE_ORIGINATOR);
+  client.addHeader("X-M2M-Origin", ORIGINATOR);
   client.addHeader("X-M2M-RVI", String(CSE_RELEASE));
   client.addHeader("X-M2M-RI", "123456");
-  client.addHeader("Content-Type", "application/vnd.onem2m-res+json; ty=" + String(ty));
+  client.addHeader("Content-Type",
+                   "application/vnd.onem2m-res+json; ty=" + String(ty));
   client.addHeader("Content-Length", String(payload.length()));
   client.addHeader("Accept", "application/json");
 
   // Send POST
   int16_t statusCode = client.POST(payload);
-  Serial.println("POST sent to: " + String(SECRET_HOST) + ":" +
-                 String(SECRET_PORT) + endpoint + " with status " + statusCode);
+  Serial.println("POST sent to: " + address + endpoint + " with status " + statusCode);
   Serial.print(payload);
   Serial.print("\n\nResponse: ");
   Serial.println(client.getString());
