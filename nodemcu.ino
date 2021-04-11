@@ -47,8 +47,7 @@ void setup()
       uint16_t mni = 1;
       handler(registerCnt("DESCRIPTOR", String(mni)), "DESCRIPTOR", "CREATION");
       digitalWrite(CNT_DESCRIPTOR_LED, HIGH);
-      mni = MAX_CIN_AGE_DAYS * 24 * 60 * 60 * 1000 / REQUEST_PERIOD;
-      handler(registerCnt("DATA", String(mni)), "DATA", "CREATION");
+      handler(registerCnt("DATA", String(MAX_CIN)), "DATA", "CREATION");
       digitalWrite(CNT_DATA_LED, HIGH);
       String positionData = "[" + String(LONGITUDE, 6) + "," + String(LATITUDE, 6) + "]";
       handler(postData(AE_ENDPOINT + "/DESCRIPTOR", positionData), "POSITION",
