@@ -80,7 +80,7 @@ This repository contains the code for nodeMCU devices for ETSI OneM2M Hackaton i
 #define ACTUATORS_GROUP "ActuatorsGroup"
 ```
 
-All the fields are the same as in [sensors `config.h`](#sensor's-config.h), but two fields are added:
+All the fields are the same as in [sensors `config.h`](#sensors-configh), but two fields are added:
 
 - `SERVER PORT`: Port that will listen to the actuator server.
 - `ACTUATORS_GROUP` actuators AE resource name at the CSE.
