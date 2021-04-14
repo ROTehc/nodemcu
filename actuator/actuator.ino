@@ -224,7 +224,7 @@ uint16_t subscribeQuality()
   net.add(3);
 
   JsonArray nu = payload["m2m:sub"].createNestedArray("nu");
-  nu.add("http://" + WiFi.localIP().toString() + ":" + String(SERVER_PORT));
+  nu.add("http://" + publicIP + ":" + String(SERVER_PORT));
 
   JsonArray lbl = payload["m2m:sub"].createNestedArray("lbl");
   lbl.add("QUALITY");
