@@ -25,7 +25,7 @@ const String CSE_URL = String(CSE_SCHEMA) + "://" + String(CSE_ADDRESS) + ":" + 
 const String ACTUATORS_ENDPOINT = CSE_URL + "cse-in/SmartApp/Actuators";
 bool isSubscribed = false;
 
-// AQI
+// Device
 float aqi = 0;
 
 void setup()
@@ -43,23 +43,62 @@ void setup()
     server.begin();
     server.on("/", handleAQI);
 
-    if (handler(registerCnt("", String(RESOURCE_NAME)), "ACTUATOR CNT", "CREATION"))
+    if (handler(registerCnt(1, "", String(RESOURCE_NAME)), "ACTUATOR CNT", "CREATION"))
     {
       // Create LOCATION and instantiate container
-      handler(registerCnt("/" + String(RESOURCE_NAME), "LOCATION"), "LOCATION CNT", "CREATION");
-      handler(registerCnt("/" + String(RESOURCE_NAME), "QUALITY"), "QUALITY CNT", "CREATION");
-      handler(subscribeQuality(), "SUBSCRIPTION", "REQUEST");
+      handler(registerCnt(1, "/" + String(RESOURCE_NAME), "LOCATION"), "LOCATION CNT", "CREATION");
+      handler(registerCnt(2, "/" + String(RESOURCE_NAME), "QUALITY"), "QUALITY CNT", "CREATION");
+      subscribeQuality();
       while (!isSubscribed)
         server.handleClient();
       handler(postLocation(), "POSITION", "UPDATE");
       // Create QUALITY container and subscribe
     }
   }
+  Serial.println("SETUP DONE");
+}
+
+void ledIndicator()
+{
+  digitalWrite(LED_NORMAL, LOW);
+  digitalWrite(LED_WARNING, LOW);
+  digitalWrite(LED_DANGER, LOW);
+  Serial.print("With AQI=" + String(aqi) + " the danger is ");
+  if (aqi != 0.0 && aqi < 4.0)
+  {
+    Serial.println("HIGH");
+    digitalWrite(LED_DANGER, HIGH);
+  }
+  else if (aqi < 7.0)
+  {
+    Serial.println("MODERATE");
+    digitalWrite(LED_WARNING, HIGH);
+  }
+  else
+  {
+    Serial.println("LOW");
+    digitalWrite(LED_NORMAL, HIGH);
+  }
+}
+
+void printLCD(const String &fl, const String &sl = "")
+{
+  lcd.clear();
+  lcd.setCursor(0, 0);
+  lcd.print(fl);
+  if (sl.length() > 0)
+  {
+    lcd.setCursor(0, 1);
+    lcd.print(sl);
+  }
 }
 
 void loop()
 {
   server.handleClient();
+  ledIndicator();
+  printLCD("AQI", String(aqi));
+  delay(250);
 }
 
 void getPublicIP()
@@ -79,68 +118,26 @@ void getPublicIP()
   }
 }
 
-void printLCD(String fl, String sl = "")
-{
-  lcd.clear();
-  lcd.setCursor(0, 0);
-  lcd.print(fl);
-  if (sl.length() > 0)
-    ;
-  {
-    lcd.setCursor(0, 1);
-    lcd.print(sl);
-  }
-}
-
 void handleAQI()
 { //Handler for the body path
-  Serial.println("== HANDLER HANDLER HANDLER ==");
   if (server.hasArg("plain") == false)
   { //Check if body received
     server.send(500, "text/plain", "Body not received");
     return;
   }
-  String reqBody = server.arg("plain");
-  Serial.println("HOT FROM THE CSEEEEEEEEEEEEEEEEEEEEEEEEE");
-  Serial.println(reqBody);
-  StaticJsonDocument<128> req;
-  DeserializationError error = deserializeJson(req, reqBody);
-  if (error)
-  {
-    Serial.print(F("deserializeJson() failed: "));
-    Serial.println(error.f_str());
-    return;
-  }
+  StaticJsonDocument<192> req;
+  deserializeJson(req, server.arg("plain"));
+  // serializeJsonPretty(req, Serial);
   if (req["m2m:sgn"]["vrq"])
   {
     server.sendHeader("X-M2M-RSC", "2000");
-    server.send(200, "text/plain", "verified");
+    server.send(200, "text/plain", "SUBSCRIPTION VALIDATED\r\n");
+    Serial.println(F("Subscription validated"));
     isSubscribed = true;
     return;
   }
   aqi = req["m2m:sgn"]["nev"]["rep"]["m2m:cin"]["con"];
-  Serial.println(aqi);
-  printLCD("AQI", String(aqi));
-  server.send(200, "application/json", "{}");
-}
-
-void ledIndicator()
-{
-  digitalWrite(LED_NORMAL, LOW);
-  digitalWrite(LED_WARNING, LOW);
-  digitalWrite(LED_DANGER, LOW);
-  if (aqi != 0 && aqi < 4)
-  {
-    digitalWrite(LED_DANGER, HIGH);
-  }
-  else if (aqi < 7)
-  {
-    digitalWrite(LED_WARNING, HIGH);
-  }
-  else
-  {
-    digitalWrite(LED_NORMAL, HIGH);
-  }
+  server.send(200, "text/plain", "AQI Received\r\n");
 }
 
 // Setup Functions
@@ -178,7 +175,7 @@ uint8_t connectWiFi()
 }
 
 // CSE Functions
-int16_t handler(int16_t responseCode, String resource, String action)
+int16_t handler(int16_t responseCode, const String &resource, const String &action)
 {
   if (responseCode == 201)
   {
@@ -195,10 +192,10 @@ int16_t handler(int16_t responseCode, String resource, String action)
   }
 }
 
-uint16_t registerCnt(String endpoint, String rn)
+uint16_t registerCnt(uint16_t mni, const String &endpoint, const String &rn)
 {
-  DynamicJsonDocument payload(1024);
-  payload["m2m:cnt"]["mni"] = 1;
+  StaticJsonDocument<128> payload;
+  payload["m2m:cnt"]["mni"] = mni;
   payload["m2m:cnt"]["rn"] = rn;
   String payloadString;
   serializeJson(payload, payloadString);
@@ -207,38 +204,39 @@ uint16_t registerCnt(String endpoint, String rn)
 
 uint16_t postLocation()
 {
-  DynamicJsonDocument payload(96);
+  StaticJsonDocument<96> payload;
   payload["m2m:cin"]["cnf"] = "application/json:0";
-  DynamicJsonDocument loc(48);
-  loc["lat"] = LATITUDE;
-  loc["lon"] = LONGITUDE;
+  StaticJsonDocument<64> loc;
+  loc["lat"] = String(LATITUDE, 6);
+  loc["lon"] = String(LONGITUDE, 6);
   String locString;
   serializeJson(loc, locString);
-  Serial.println("Location string: " + locString);
   payload["m2m:cin"]["con"] = locString;
   String payloadString;
-  Serial.println("Payload string: " + payloadString);
   serializeJson(payload, payloadString);
   return postToCse("/" + String(RESOURCE_NAME) + "/LOCATION", payloadString, 4);
 }
 
 uint16_t subscribeQuality()
 {
-  String rn = "subQuality" + String(RESOURCE_NAME);
-  DynamicJsonDocument payload(1024);
+  StaticJsonDocument<256> payload;
   JsonArray net = payload["m2m:sub"]["enc"].createNestedArray("net");
-  net.add(3);
   net.add(4);
+
   JsonArray nu = payload["m2m:sub"].createNestedArray("nu");
   nu.add("http://" + WiFi.localIP().toString() + ":" + String(SERVER_PORT));
-  payload["m2m:sub"]["rn"] = rn;
+
+  JsonArray lbl = payload["m2m:sub"].createNestedArray("lbl");
+  lbl.add("QUALITY");
+
+  payload["m2m:sub"]["rn"] = "subQuality" + String(RESOURCE_NAME);
   payload["m2m:sub"]["nct"] = 1;
   String payloadString;
   serializeJson(payload, payloadString);
-  return postToCse("/" + String(RESOURCE_NAME) + "/QUALITY/la", payloadString, 23);
+  return postToCse("/" + String(RESOURCE_NAME) + "/QUALITY", payloadString, 23);
 }
 
-uint32_t postToCse(String endpoint, String payload, uint8_t ty)
+uint32_t postToCse(const String &endpoint, const String &payload, uint8_t ty)
 {
   HTTPClient client;
   String url = ACTUATORS_ENDPOINT + endpoint;
@@ -258,13 +256,15 @@ uint32_t postToCse(String endpoint, String payload, uint8_t ty)
   // Send POST
   int16_t statusCode = client.POST(payload);
   Serial.println("POST sent to: " + url + " with status " + statusCode);
-  Serial.print(payload);
-  Serial.print("\n\nResponse: ");
-  DynamicJsonDocument res(1024);
-  deserializeJson(res, client.getString());
-  serializeJsonPretty(res, Serial);
-  Serial.println();
-  Serial.println();
+  Serial.println(payload);
+  Serial.println("Response:");
+  Serial.println(client.getString());
+  /*
+  StaticJsonDocument<1024> postResponse;
+  deserializeJson(postResponse, client.getString());
+  serializeJsonPretty(postResponse, Serial);
+  Serial.println("\n");
+  */
   client.end();
   return statusCode;
 }
