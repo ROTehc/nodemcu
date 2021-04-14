@@ -163,7 +163,7 @@ uint8_t connectWiFi()
     Serial.println("\nConnection established!");
     Serial.print("Local IP: ");
     Serial.println(WiFi.localIP());
-    printLCD("CONNECTED");
+    printLCD("CONNECTED", WiFi.SSID());
     return 1;
   }
   else
