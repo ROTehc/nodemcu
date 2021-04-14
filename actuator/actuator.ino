@@ -221,7 +221,7 @@ uint16_t subscribeQuality()
 {
   StaticJsonDocument<256> payload;
   JsonArray net = payload["m2m:sub"]["enc"].createNestedArray("net");
-  net.add(4);
+  net.add(3);
 
   JsonArray nu = payload["m2m:sub"].createNestedArray("nu");
   nu.add("http://" + WiFi.localIP().toString() + ":" + String(SERVER_PORT));
