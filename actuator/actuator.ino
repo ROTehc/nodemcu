@@ -43,11 +43,11 @@ void setup()
     server.begin();
     server.on("/", handleAQI);
 
-    if (handler(registerCnt(1, "", String(RESOURCE_NAME)), "ACTUATOR CNT", "CREATION"))
+    if (handler(registerCnt("", String(RESOURCE_NAME)), "ACTUATOR CNT", "CREATION"))
     {
       // Create LOCATION and instantiate container
-      handler(registerCnt(1, "/" + String(RESOURCE_NAME), "LOCATION"), "LOCATION CNT", "CREATION");
-      handler(registerCnt(2, "/" + String(RESOURCE_NAME), "QUALITY"), "QUALITY CNT", "CREATION");
+      handler(registerCnt("/" + String(RESOURCE_NAME), "LOCATION"), "LOCATION CNT", "CREATION");
+      handler(registerCnt("/" + String(RESOURCE_NAME), "QUALITY"), "QUALITY CNT", "CREATION");
       subscribeQuality();
       while (!isSubscribed)
         server.handleClient();
@@ -192,10 +192,10 @@ int16_t handler(int16_t responseCode, const String &resource, const String &acti
   }
 }
 
-uint16_t registerCnt(uint16_t mni, const String &endpoint, const String &rn)
+uint16_t registerCnt(const String &endpoint, const String &rn)
 {
   StaticJsonDocument<128> payload;
-  payload["m2m:cnt"]["mni"] = mni;
+  payload["m2m:cnt"]["mni"] = 1;
   payload["m2m:cnt"]["rn"] = rn;
   String payloadString;
   serializeJson(payload, payloadString);
