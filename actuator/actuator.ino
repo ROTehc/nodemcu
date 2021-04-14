@@ -7,8 +7,8 @@
 #include <ArduinoJson.h>
 #include <ESP8266WebServer.h>
 
-#define LED_WARNING D4
-#define LED_NORMAL D5
+#define LED_NORMAL D4
+#define LED_WARNING D5
 #define LED_DANGER D6
 
 // LCD
@@ -16,14 +16,17 @@ LiquidCrystal_I2C lcd(0x27, 16, 2);
 
 // HTTP Server
 ESP8266WebServer server(SERVER_PORT);
-String publicIP = "";
+String publicIP;
 
 // CSE
-const String address = String(CSE_SCHEMA) + "://" + String(CSE_ADDRESS) + ":" + String(CSE_PORT);
+const String CSE_URL = String(CSE_SCHEMA) + "://" + String(CSE_ADDRESS) + ":" + String(CSE_PORT) + "/";
 
-// AE
-const String AE_ENDPOINT = String(CSE_ENDPOINT) + "/" + String(ACTUATORS_GROUP);
-const String ORIGINATOR = String(CSE_ORIGINATOR);
+// CNT
+const String ACTUATORS_ENDPOINT = CSE_URL + "cse-in/SmartApp/Actuators";
+bool isSubscribed = false;
+
+// AQI
+float aqi = 0;
 
 void setup()
 {
@@ -40,18 +43,16 @@ void setup()
     server.begin();
     server.on("/", handleAQI);
 
-    if (handler(registerCnt(AE_ENDPOINT, RESOURCE_NAME, 1), "ACTUATOR CNT", "CREATION"))
+    if (handler(registerCnt("", String(RESOURCE_NAME)), "ACTUATOR CNT", "CREATION"))
     {
       // Create LOCATION and instantiate container
-      handler(registerCnt(AE_ENDPOINT + "/" + RESOURCE_NAME, "LOCATION", 1), "LOCATION CNT", "CREATION");
-      // TODO: send JSON location without errors
-      //String positionData = "{\"lon\":" + String(LONGITUDE, 6) + ",\"lat\":" + String(LATITUDE, 6) + "}";
-      String positionData = "[mock]";
-      handler(postData(AE_ENDPOINT + "/" + RESOURCE_NAME + "/LOCATION", positionData), "POSITION", "UPDATE");
-
+      handler(registerCnt("/" + String(RESOURCE_NAME), "LOCATION"), "LOCATION CNT", "CREATION");
+      handler(registerCnt("/" + String(RESOURCE_NAME), "QUALITY"), "QUALITY CNT", "CREATION");
+      handler(subscribeQuality(), "SUBSCRIPTION", "REQUEST");
+      while (!isSubscribed)
+        server.handleClient();
+      handler(postLocation(), "POSITION", "UPDATE");
       // Create QUALITY container and subscribe
-      handler(registerCnt(AE_ENDPOINT + "/" + RESOURCE_NAME, "QUALITY", 1), "QUALITY CNT", "CREATION");
-      handler(subscribeQuality(AE_ENDPOINT + "/" + RESOURCE_NAME + "/QUALITY"), "SUBSCRIPTION", "REQUEST");
     }
   }
 }
@@ -71,7 +72,7 @@ void getPublicIP()
   else
   {
     client.GET();
-    String publicIP = client.getString();
+    publicIP = client.getString();
     client.end();
     Serial.print("Public IP: ");
     Serial.println(publicIP);
@@ -93,54 +94,52 @@ void printLCD(String fl, String sl = "")
 
 void handleAQI()
 { //Handler for the body path
-
+  Serial.println("== HANDLER HANDLER HANDLER ==");
   if (server.hasArg("plain") == false)
   { //Check if body received
-
-    server.send(200, "text/plain", "Body not received");
+    server.send(500, "text/plain", "Body not received");
     return;
   }
-
-  String message = server.arg("plain");
-
-  StaticJsonDocument<80> filter;
-  filter["m2m:sgn"]["nev"]["rep"]["m2m:cin"]["con"] = true;
-
-  StaticJsonDocument<192> doc;
-
-  DeserializationError error = deserializeJson(doc, message, DeserializationOption::Filter(filter));
-
+  String reqBody = server.arg("plain");
+  Serial.println("HOT FROM THE CSEEEEEEEEEEEEEEEEEEEEEEEEE");
+  Serial.println(reqBody);
+  StaticJsonDocument<128> req;
+  DeserializationError error = deserializeJson(req, reqBody);
   if (error)
   {
     Serial.print(F("deserializeJson() failed: "));
     Serial.println(error.f_str());
     return;
   }
-
-  const char *notification = doc["m2m:sgn"]["nev"]["rep"]["m2m:cin"]["con"];
-  Serial.println(notification);
-  printLCD("New value", String(notification));
-
-  server.sendHeader("X-M2M-RSC", "2000");
-  server.send(200, "text/plain", message);
+  if (req["m2m:sgn"]["vrq"])
+  {
+    server.sendHeader("X-M2M-RSC", "2000");
+    server.send(200, "text/plain", "verified");
+    isSubscribed = true;
+    return;
+  }
+  aqi = req["m2m:sgn"]["nev"]["rep"]["m2m:cin"]["con"];
+  Serial.println(aqi);
+  printLCD("AQI", String(aqi));
+  server.send(200, "application/json", "{}");
 }
 
-void ledIndicator(int level)
+void ledIndicator()
 {
   digitalWrite(LED_NORMAL, LOW);
   digitalWrite(LED_WARNING, LOW);
   digitalWrite(LED_DANGER, LOW);
-  if (level < 500)
+  if (aqi != 0 && aqi < 4)
   {
-    digitalWrite(LED_NORMAL, HIGH);
+    digitalWrite(LED_DANGER, HIGH);
   }
-  else if (level < 1000)
+  else if (aqi < 7)
   {
     digitalWrite(LED_WARNING, HIGH);
   }
   else
   {
-    digitalWrite(LED_DANGER, HIGH);
+    digitalWrite(LED_NORMAL, HIGH);
   }
 }
 
@@ -196,39 +195,61 @@ int16_t handler(int16_t responseCode, String resource, String action)
   }
 }
 
-uint16_t registerCnt(String endpoint, String rn, String mni)
+uint16_t registerCnt(String endpoint, String rn)
 {
-  String payload = "{\"m2m:cnt\":{\"mni\":" + mni + ",\"rn\":\"" + rn + "\"}}";
-  return postToCse(endpoint, payload, 3);
+  DynamicJsonDocument payload(1024);
+  payload["m2m:cnt"]["mni"] = 1;
+  payload["m2m:cnt"]["rn"] = rn;
+  String payloadString;
+  serializeJson(payload, payloadString);
+  return postToCse(endpoint, payloadString, 3);
 }
 
-uint16_t postData(String endpoint, String data)
+uint16_t postLocation()
 {
-  String payload =
-      "{\"m2m:cin\":{\"cnf\":\"application/json\",\"con\":\"" + data + "\"}}";
-  return postToCse(endpoint, payload, 4);
+  DynamicJsonDocument payload(96);
+  payload["m2m:cin"]["cnf"] = "application/json:0";
+  DynamicJsonDocument loc(48);
+  loc["lat"] = LATITUDE;
+  loc["lon"] = LONGITUDE;
+  String locString;
+  serializeJson(loc, locString);
+  Serial.println("Location string: " + locString);
+  payload["m2m:cin"]["con"] = locString;
+  String payloadString;
+  Serial.println("Payload string: " + payloadString);
+  serializeJson(payload, payloadString);
+  return postToCse("/" + String(RESOURCE_NAME) + "/LOCATION", payloadString, 4);
 }
 
-uint16_t subscribeQuality(String endpoint)
+uint16_t subscribeQuality()
 {
-  String payload =
-      String("{\"m2m:sub\":{\"enc\" : {\"net\" : [3]},\"nu\" : [\"http://") + "192.168.0.93" + ":" + String(SERVER_PORT) + "/\"], \"rn\" : \"DataSubscriber\"}, \"nct\": 0}";
-  return postToCse(endpoint, payload, 23);
+  String rn = "subQuality" + String(RESOURCE_NAME);
+  DynamicJsonDocument payload(1024);
+  JsonArray net = payload["m2m:sub"]["enc"].createNestedArray("net");
+  net.add(3);
+  net.add(4);
+  JsonArray nu = payload["m2m:sub"].createNestedArray("nu");
+  nu.add("http://" + WiFi.localIP().toString() + ":" + String(SERVER_PORT));
+  payload["m2m:sub"]["rn"] = rn;
+  payload["m2m:sub"]["nct"] = 1;
+  String payloadString;
+  serializeJson(payload, payloadString);
+  return postToCse("/" + String(RESOURCE_NAME) + "/QUALITY/la", payloadString, 23);
 }
 
-uint32_t
-postToCse(String endpoint, String payload, uint8_t ty)
+uint32_t postToCse(String endpoint, String payload, uint8_t ty)
 {
   HTTPClient client;
-  String url = address + endpoint;
+  String url = ACTUATORS_ENDPOINT + endpoint;
   if (!client.begin(url))
   {
     Serial.println("Connection to host failed");
     return 0;
   }
-  client.addHeader("X-M2M-Origin", ORIGINATOR);
+  client.addHeader("X-M2M-Origin", "SmartApp");
   client.addHeader("X-M2M-RVI", String(CSE_RELEASE));
-  client.addHeader("X-M2M-RI", "123456");
+  client.addHeader("X-M2M-RI", String(random(10000, 99999)));
   client.addHeader("Content-Type",
                    "application/vnd.onem2m-res+json; ty=" + String(ty));
   client.addHeader("Content-Length", String(payload.length()));
@@ -236,10 +257,13 @@ postToCse(String endpoint, String payload, uint8_t ty)
 
   // Send POST
   int16_t statusCode = client.POST(payload);
-  Serial.println("POST sent to: " + address + endpoint + " with status " + statusCode);
+  Serial.println("POST sent to: " + url + " with status " + statusCode);
   Serial.print(payload);
   Serial.print("\n\nResponse: ");
-  Serial.println(client.getString());
+  DynamicJsonDocument res(1024);
+  deserializeJson(res, client.getString());
+  serializeJsonPretty(res, Serial);
+  Serial.println();
   Serial.println();
   client.end();
   return statusCode;
